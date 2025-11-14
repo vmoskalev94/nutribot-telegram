@@ -1,12 +1,15 @@
 package com.nutribot.bot.workout;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WorkoutService {
@@ -26,7 +29,10 @@ public class WorkoutService {
                 .startedAt(OffsetDateTime.now())
                 .status(WorkoutStatus.DRAFT)
                 .build();
-        return workoutRepository.save(workout);
+
+        Workout saved = workoutRepository.save(workout);
+        log.info("Workout draft created: workoutId={}, userId={}", saved.getId(), userId);
+        return saved;
     }
 
     // ===== Силовая: добавить упражнение =====
@@ -109,6 +115,7 @@ public class WorkoutService {
 
     @Transactional
     public void finishWorkout(Long workoutId) {
+        // перевести в завершённый/ACTIVE
         Workout workout = getWorkoutRequired(workoutId);
         if (workout.getStatus() == WorkoutStatus.DELETED) {
             throw new IllegalStateException("Workout already deleted: " + workoutId);
@@ -118,7 +125,10 @@ public class WorkoutService {
             return;
         }
         workout.setStatus(WorkoutStatus.ACTIVE);
+
         workoutRepository.save(workout);
+        log.info("Workout finished: workoutId={}, userId={}", workoutId, workout.getUserId());
+
     }
 
     // ===== Удалить тренировку (soft-delete) =====
@@ -130,7 +140,9 @@ public class WorkoutService {
             return;
         }
         workout.setStatus(WorkoutStatus.DELETED);
+
         workoutRepository.save(workout);
+        log.info("Workout deleted: workoutId={}, userId={}", workoutId, workout.getUserId());
     }
 
     // ===== Список тренировок пользователя (с пагинацией) =====
@@ -199,5 +211,22 @@ public class WorkoutService {
     private Workout getWorkoutRequired(Long workoutId) {
         return workoutRepository.findById(workoutId)
                 .orElseThrow(() -> new IllegalArgumentException("Workout not found: " + workoutId));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Workout> findLastActiveWorkout(Long userId) {
+        // Берём одну последнюю тренировку пользователя
+        List<Workout> workouts = workoutRepository
+                .findPageByUserAndStatusOrderByStartedAtDesc(
+                        userId,
+                        WorkoutStatus.ACTIVE,
+                        1,
+                        0
+                );
+
+        if (workouts.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(workouts.get(0));
     }
 }

@@ -23,8 +23,13 @@ server:
 
 logging:
   level:
-    org.flywaydb: INFO
+    root: ${LOGGING_LEVEL_ROOT:WARN}            # spring, hibernate, telegram etc.
+    com.nutribot: ${LOGGING_LEVEL_APP:WARN}     # application
+    org.flywaydb: ${LOGGING_LEVEL_FLYWAY:WARN}  # flyway
 
 nutribot:
   telegram:
     token: ${TELEGRAM_BOT_TOKEN:}
+  features:
+    nutrient-explain:
+      user-visible: ${TELEGRAM_NUTRIENT_EXPLAIN:false}

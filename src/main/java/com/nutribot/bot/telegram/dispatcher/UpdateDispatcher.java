@@ -1,5 +1,6 @@
 package com.nutribot.bot.telegram.dispatcher;
 
+import com.nutribot.bot.telegram.client.TelegramClient;
 import com.pengrad.telegrambot.model.CallbackQuery;
 import com.pengrad.telegrambot.model.Message;
 import com.pengrad.telegrambot.model.Update;
@@ -14,16 +15,17 @@ import java.util.List;
  * Конвертирует raw Update в UpdateContext и
  * передаёт его подходящему BotUpdateHandler.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
-@Slf4j
 public class UpdateDispatcher {
 
     private final List<BotUpdateHandler> handlers;
+    private final TelegramClient tg;
 
     public void dispatch(Update update) {
         // todo вывести в debug
-        log.info("Incoming update: id={}, hasMessage={}, hasCallback={}, text={}, hasLocation={}, hasContact={}",
+        log.debug("Incoming update: id={}, hasMessage={}, hasCallback={}, text={}, hasLocation={}, hasContact={}",
                 update.updateId(),
                 update.message() != null,
                 update.callbackQuery() != null,
@@ -31,6 +33,7 @@ public class UpdateDispatcher {
                 update.message() != null && update.message().location() != null,
                 update.message() != null && update.message().contact() != null
         );
+
         UpdateContext ctx = toContext(update);
         if (ctx == null) {
             log.debug("Skip update without chatId: {}", update);

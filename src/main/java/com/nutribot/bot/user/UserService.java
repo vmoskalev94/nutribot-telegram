@@ -123,12 +123,11 @@ public class UserService {
 
     @Transactional
     public void updateGeo(Long userId, Double lat, Double lon) {
-        userRepository.findById(userId).ifPresent(user -> {
-            user.setGeoLat(lat);
-            user.setGeoLon(lon);
-            user.setUpdatedAt(OffsetDateTime.now());
-            userRepository.save(user);
-        });
+        User user = getUserOrThrow(userId);
+        user.setGeoLat(lat);
+        user.setGeoLon(lon);
+        user.setUpdatedAt(OffsetDateTime.now());
+        userRepository.save(user);
     }
 
     @Transactional
@@ -140,4 +139,16 @@ public class UserService {
         });
     }
 
+    @Transactional(readOnly = true)
+    public User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+    }
+
+    @Transactional
+    public void updateNutrientVerbose(Long userId, boolean verbose) {
+        User user = getUserOrThrow(userId);
+        user.setNutrientVerbose(verbose);
+        userRepository.save(user);
+    }
 }

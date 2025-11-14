@@ -53,6 +53,9 @@ public class User {
     @Column("geo_lon")
     private Double geoLon;
 
+    @Column("nutrient_verbose")
+    private Boolean nutrientVerbose;
+
     @Column("created_at")
     private OffsetDateTime createdAt;
 

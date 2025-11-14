@@ -1,16 +1,20 @@
 package com.nutribot.bot.onboarding;
 
+import com.nutribot.bot.user.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OnboardingService {
 
     private final UserOnboardingStateRepository stateRepository;
+    private final UserService userService;
 
     /**
      * Начать онбординг (или перезапустить) с шага A1.
@@ -26,6 +30,7 @@ public class OnboardingService {
         state.setDataJson(null);
 
         stateRepository.save(state);
+        log.info("Onboarding started for userId={}", userId);
     }
 
     @Transactional(readOnly = true)
@@ -41,7 +46,9 @@ public class OnboardingService {
                         .userId(userId)
                         .build());
         state.setCurrentStep(step);
+
         stateRepository.save(state);
+        log.debug("Onboarding step updated: userId={}, step={}", userId, step);
     }
 
     @Transactional
@@ -67,5 +74,12 @@ public class OnboardingService {
         return stateRepository.findByUserId(userId)
                 .map(UserOnboardingState::getDataJson)
                 .orElse(null);
+    }
+
+    @Transactional
+    public void complete(Long userId) {
+        userService.markOnboardingCompleted(userId);
+        stateRepository.deleteByUserId(userId);
+        log.info("Onboarding completed for userId={}", userId);
     }
 }
