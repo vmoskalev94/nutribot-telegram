@@ -22,6 +22,15 @@ public class UpdateDispatcher {
     private final List<BotUpdateHandler> handlers;
 
     public void dispatch(Update update) {
+        // todo вывести в debug
+        log.info("Incoming update: id={}, hasMessage={}, hasCallback={}, text={}, hasLocation={}, hasContact={}",
+                update.updateId(),
+                update.message() != null,
+                update.callbackQuery() != null,
+                update.message() != null ? update.message().text() : null,
+                update.message() != null && update.message().location() != null,
+                update.message() != null && update.message().contact() != null
+        );
         UpdateContext ctx = toContext(update);
         if (ctx == null) {
             log.debug("Skip update without chatId: {}", update);
