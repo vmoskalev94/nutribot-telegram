@@ -1,3 +1,30 @@
 spring:
   application:
     name: nutribot-telegram
+  profiles:
+    default: local
+  config:
+    activate:
+      on-profile: local
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nutribot}
+    username: ${DB_USERNAME:nutribot}
+    password: ${DB_PASSWORD:nutribot}
+    driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+logging:
+  level:
+    org.flywaydb: INFO
+
+nutribot:
+  telegram:
+    token: ${TELEGRAM_BOT_TOKEN:}
