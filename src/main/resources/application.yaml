@@ -3,14 +3,11 @@ spring:
     name: nutribot-telegram
   profiles:
     default: local
-  config:
-    activate:
-      on-profile: local
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nutribot}
-    username: ${DB_USERNAME:nutribot}
-    password: ${DB_PASSWORD:nutribot}
+    username: ${SPRING_DATASOURCE_USERNAME:nutribot}
+    password: ${SPRING_DATASOURCE_PASSWORD:nutribot}
     driver-class-name: org.postgresql.Driver
 
   flyway:
@@ -23,13 +20,13 @@ server:
 
 logging:
   level:
-    root: ${LOGGING_LEVEL_ROOT:WARN}            # spring, hibernate, telegram etc.
-    com.nutribot: ${LOGGING_LEVEL_APP:WARN}     # application
-    org.flywaydb: ${LOGGING_LEVEL_FLYWAY:WARN}  # flyway
+    root: ${LOGGING_LEVEL_ROOT:INFO}
+    com.nutribot: ${LOGGING_LEVEL_APP:INFO}
+    org.flywaydb: ${LOGGING_LEVEL_FLYWAY:INFO}
 
 nutribot:
   telegram:
-    token: ${TELEGRAM_BOT_TOKEN:}
+    token: ${TELEGRAM_BOT_TOKEN}
   features:
     nutrient-explain:
       user-visible: ${TELEGRAM_NUTRIENT_EXPLAIN:false}

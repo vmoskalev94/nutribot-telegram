@@ -1,22 +1,39 @@
 version: "3.9"
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: nutribot-postgres
+  db:
+    image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_DB: nutribot
-      POSTGRES_USER: nutribot
-      POSTGRES_PASSWORD: nutribot
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
     volumes:
-      - nutribot_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nutribot -d nutribot"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - nutribot-db-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432" # локальный доступ к базе
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: nutribot
+
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+
+      # профиль можно добавить при необходимости
+      # SPRING_PROFILES_ACTIVE: prod
+
+    # по желанию:
+    # ports:
+    #   - "8080:8080"
 
 volumes:
-  nutribot_pgdata:
+  nutribot-db-data:

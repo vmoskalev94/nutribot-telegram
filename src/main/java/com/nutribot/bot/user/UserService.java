@@ -29,6 +29,7 @@ public class UserService {
                     .onboardingCompleted(false)
                     .createdAt(now)
                     .updatedAt(now)
+                    .nutrientVerbose(false)
                     .build();
 
             User saved = userRepository.save(user);
