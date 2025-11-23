@@ -7,6 +7,7 @@ import com.nutribot.bot.user.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -162,23 +163,28 @@ public class StrengthWorkoutAddFlowHandler implements BotUpdateHandler {
     private void sendRirHelpAndFirstSetPrompt(Long chatId, String exerciseName) {
         String text = """
                 Упражнение «%s» добавлено ✅
-                
+
                 Теперь будем записывать подходы.
-                
+
                 Формат ввода: вес,повторы[,RIR]
-                
+
                 Что такое RIR (reps in reserve):
                 • 0 — подход до отказа;
                 • 1–2 — очень тяжело, но есть небольшой запас;
                 • 3–4 — умеренно тяжело, запас заметный.
-                
-                Примеры:
+
+                Примеры одиночного ввода:
                 80,10,2
                 60 8
-                
+
+                Или можно ввести сразу несколько подходов (каждый с новой строки):
+                80,10,2
+                80,9,1
+                75,10,2
+
                 Разделители можно ставить как пробел, запятую, точку или дефис.
-                
-                Введи первый подход для «%s»
+
+                Введи подходы для «%s»
                 или воспользуйся кнопками ниже:
                 """.formatted(exerciseName, exerciseName);
 
@@ -197,15 +203,28 @@ public class StrengthWorkoutAddFlowHandler implements BotUpdateHandler {
     // ==================== подходы ====================
 
     private void handleSetInput(Long chatId, Long userId, WorkoutCreationState state, String input) {
+        Long exerciseId = state.getCurrentExerciseId();
+        StrengthExercise exercise = strengthExerciseRepository.findById(exerciseId)
+                .orElseThrow(() -> new IllegalStateException("Exercise not found: " + exerciseId));
+
+        // Проверяем, есть ли переносы строк (многострочный ввод)
+        String[] lines = input.split("\\r?\\n");
+
+        if (lines.length > 1) {
+            // Множественный ввод подходов
+            handleMultipleSetsInput(chatId, exerciseId, exercise, lines);
+        } else {
+            // Одиночный ввод подхода
+            handleSingleSetInput(chatId, exerciseId, exercise, input);
+        }
+    }
+
+    private void handleSingleSetInput(Long chatId, Long exerciseId, StrengthExercise exercise, String input) {
         ParsedSet parsed = tryParseSet(input);
         if (parsed == null) {
             sendSetInvalid(chatId);
             return;
         }
-
-        Long exerciseId = state.getCurrentExerciseId();
-        StrengthExercise exercise = strengthExerciseRepository.findById(exerciseId)
-                .orElseThrow(() -> new IllegalStateException("Exercise not found: " + exerciseId));
 
         StrengthSet set = workoutService.addStrengthSet(
                 exerciseId,
@@ -232,6 +251,100 @@ public class StrengthWorkoutAddFlowHandler implements BotUpdateHandler {
         var keyboard = tg.inlineKeyboard(List.of(List.of(newExerciseBtn, finishBtn)));
 
         tg.sendMessage(chatId, sb.toString(), keyboard);
+    }
+
+    private void handleMultipleSetsInput(Long chatId, Long exerciseId, StrengthExercise exercise, String[] lines) {
+        // Сначала парсим все строки, чтобы убедиться, что все валидны
+        List<ParsedSet> parsedSets = new ArrayList<>();
+        List<String> invalidLines = new ArrayList<>();
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty()) {
+                continue; // пропускаем пустые строки
+            }
+
+            ParsedSet parsed = tryParseSet(line);
+            if (parsed == null) {
+                invalidLines.add("Строка " + (i + 1) + ": \"" + line + "\"");
+            } else {
+                parsedSets.add(parsed);
+            }
+        }
+
+        // Если есть невалидные строки, сообщаем об ошибке
+        if (!invalidLines.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("Не получилось распознать некоторые подходы:\n\n");
+            for (String invalidLine : invalidLines) {
+                sb.append("❌ ").append(invalidLine).append("\n");
+            }
+            sb.append("\nФормат: вес,повторы[,RIR]\n\n");
+            sb.append("Примеры:\n");
+            sb.append("80,10,2\n");
+            sb.append("80,9,1\n");
+            sb.append("75,10,2\n\n");
+            sb.append("Попробуй ещё раз. Все подходы должны быть в правильном формате.");
+
+            tg.sendMessage(chatId, sb.toString());
+            return;
+        }
+
+        if (parsedSets.isEmpty()) {
+            sendSetInvalid(chatId);
+            return;
+        }
+
+        // Все строки валидны — создаём подходы
+        List<StrengthSet> createdSets = new ArrayList<>();
+        for (ParsedSet parsed : parsedSets) {
+            StrengthSet set = workoutService.addStrengthSet(
+                    exerciseId,
+                    parsed.weight(),
+                    parsed.reps(),
+                    parsed.rir()
+            );
+            createdSets.add(set);
+        }
+
+        // Формируем сообщение об успешном добавлении
+        StringBuilder sb = new StringBuilder();
+        sb.append("Записал ").append(createdSets.size())
+                .append(getSetsWord(createdSets.size()))
+                .append(" для «").append(exercise.getName()).append("»:\n\n");
+
+        for (int i = 0; i < createdSets.size(); i++) {
+            StrengthSet set = createdSets.get(i);
+            ParsedSet parsed = parsedSets.get(i);
+            int setNumber = set.getOrderIndex() != null ? set.getOrderIndex() : (i + 1);
+
+            sb.append("#").append(setNumber).append(": ")
+                    .append(parsed.weight()).append(" кг × ")
+                    .append(parsed.reps()).append(" повторений");
+            if (parsed.rir() != null) {
+                sb.append(", RIR ").append(parsed.rir());
+            }
+            sb.append("\n");
+        }
+
+        sb.append("\nВведи ещё подходы для этого упражнения\n")
+                .append("или используй кнопки ниже:");
+
+        var newExerciseBtn = new TelegramClient.InlineButton("Новое упражнение", "workout:strength:new_exercise");
+        var finishBtn = new TelegramClient.InlineButton("Завершить тренировку", "workout:strength:finish");
+        var keyboard = tg.inlineKeyboard(List.of(List.of(newExerciseBtn, finishBtn)));
+
+        tg.sendMessage(chatId, sb.toString(), keyboard);
+    }
+
+    private String getSetsWord(int count) {
+        if (count % 10 == 1 && count % 100 != 11) {
+            return " подход";
+        } else if ((count % 10 >= 2 && count % 10 <= 4) && (count % 100 < 10 || count % 100 >= 20)) {
+            return " подхода";
+        } else {
+            return " подходов";
+        }
     }
 
     private ParsedSet tryParseSet(String input) {
@@ -269,13 +382,18 @@ public class StrengthWorkoutAddFlowHandler implements BotUpdateHandler {
     private void sendSetInvalid(Long chatId) {
         tg.sendMessage(chatId, """
                 Не получилось распознать подход 😔
-                
+
                 Формат: вес,повторы[,RIR]
-                
-                Примеры:
+
+                Примеры одиночного ввода:
                 80,10,2
                 60 8
-                
+
+                Или несколько подходов сразу (каждый с новой строки):
+                80,10,2
+                80,9,1
+                75,10,2
+
                 Разделители можно ставить как пробел, запятую, точку или дефис.
                 """);
     }
