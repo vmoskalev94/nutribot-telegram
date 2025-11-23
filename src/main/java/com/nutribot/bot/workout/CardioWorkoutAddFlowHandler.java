@@ -450,7 +450,7 @@ public class CardioWorkoutAddFlowHandler implements BotUpdateHandler {
                 "Рассчитать нутриенты по этой тренировке",
                 "workout:nutrients:" + baseState.getWorkoutId()
         );
-        var mainMenuBtn = new TelegramClient.InlineButton("Главное меню", "menu:main");
+        var mainMenuBtn = new TelegramClient.InlineButton("⬅️Главное меню", "menu:main");
 
         var keyboard = tg.inlineKeyboard(
                 List.of(

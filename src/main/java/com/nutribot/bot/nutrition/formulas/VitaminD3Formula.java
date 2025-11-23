@@ -11,7 +11,7 @@ import java.util.Map;
  * Витамин D3
  * <p>
  * Формула из спецификации:
- * D3 = (weight * 15)
+ * D3 = 200 + (weight * 15)
  * + (age > 50 ? 400 : 0)
  * + (sun_exposure < 15 ? 800 : 0)
  * + TSS_total * 15
@@ -36,7 +36,7 @@ public class VitaminD3Formula implements ExplainableNutrientFormula {
         double ageBonus = age > 50 ? 400.0 : 0.0;
         double sunBonus = sun < 15.0 ? 800.0 : 0.0;
 
-        double value = weight * 15.0
+        double value = 200 + weight * 15.0
                 + ageBonus
                 + sunBonus
                 + tss * 15.0;
@@ -46,7 +46,7 @@ public class VitaminD3Formula implements ExplainableNutrientFormula {
 
     @Override
     public String template() {
-        return "D3 = (weight_kg * 15) + age_bonus + sun_bonus + (tss_total * 15)";
+        return "D3 = 200 + (weight_kg * 15) + age_bonus + sun_bonus + (tss_total * 15)";
     }
 
     @Override

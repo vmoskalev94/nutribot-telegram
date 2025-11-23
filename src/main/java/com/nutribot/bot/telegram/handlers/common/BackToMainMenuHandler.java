@@ -14,7 +14,7 @@ public class BackToMainMenuHandler implements BotUpdateHandler {
     private final OnboardingGate onboardingGate;
     private final TelegramClient tg;
 
-    private static final String MAIN_MENU_TEXT = "Главное меню";
+    private static final String MAIN_MENU_TEXT = "⬅️Главное меню";
 
     @Override
     public boolean canHandle(UpdateContext ctx) {

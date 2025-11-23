@@ -45,7 +45,7 @@ public class Omega3Formula implements ExplainableNutrientFormula {
 
         double inflammationLevel = 1.0;
 
-        double value = brainWeight * 0.5
+        double value = 300 + brainWeight * 0.5
                 + inflammationLevel * 100.0
                 + tss * 45.0;
 
@@ -54,7 +54,7 @@ public class Omega3Formula implements ExplainableNutrientFormula {
 
     @Override
     public String template() {
-        return "OMEGA3 = (brain_weight_g * 0.5) + (inflammation_level * 100) + (tss_total * 45)";
+        return "OMEGA3 = 300 + (brain_weight_g * 0.5) + (inflammation_level * 100) + (tss_total * 45)";
     }
 
     @Override

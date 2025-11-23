@@ -11,7 +11,7 @@ public final class ProfileMenuButtons {
 
     public static final String VIEW = "Просмотр";
     public static final String EDIT = "Редактировать";
-    public static final String BACK_TO_MAIN = "Главное меню";
+    public static final String BACK_TO_MAIN = "⬅️Главное меню";
 
     // кнопки меню "Профиль → Редактировать"
     public static final String EDIT_NAME = "Имя";

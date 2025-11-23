@@ -353,7 +353,7 @@ public class StrengthWorkoutAddFlowHandler implements BotUpdateHandler {
                 "Рассчитать нутриенты по этой тренировке",
                 "workout:nutrients:" + state.getWorkoutId()
         );
-        var mainMenuBtn = new TelegramClient.InlineButton("Главное меню", "menu:main");
+        var mainMenuBtn = new TelegramClient.InlineButton("⬅️Главное меню", "menu:main");
 
         var keyboard = tg.inlineKeyboard(
                 List.of(

@@ -260,7 +260,7 @@ public class WorkoutsMenuHandler implements BotUpdateHandler {
         }
 
         // кнопка "Главное меню"
-        rows.add(List.of(new TelegramClient.InlineButton("Главное меню", "menu:main")));
+        rows.add(List.of(new TelegramClient.InlineButton("⬅️Главное меню", "menu:main")));
 
         var keyboard = tg.inlineKeyboard(rows);
         tg.sendMessage(chatId, sb.toString(), keyboard);

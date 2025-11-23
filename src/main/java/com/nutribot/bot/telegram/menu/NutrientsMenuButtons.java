@@ -10,7 +10,7 @@ public final class NutrientsMenuButtons {
     public static final String LAST_WORKOUT = "Расчёт нутриентов последней тренировки";
     public static final String VERBOSE_MODE  = "Подробный режим расчёта";
     public static final String STATS = "Статистика по нутриентам (скоро)";
-    public static final String BACK_TO_MAIN = "Главное меню";
+    public static final String BACK_TO_MAIN = "⬅️Главное меню";
 
     // Расширенный профиль
     public static final String SMOKING = "Курение";
