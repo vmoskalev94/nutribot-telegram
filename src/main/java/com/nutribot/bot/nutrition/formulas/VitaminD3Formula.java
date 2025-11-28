@@ -1,7 +1,9 @@
 package com.nutribot.bot.nutrition.formulas;
 
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
+import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
+import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -10,13 +12,13 @@ import java.util.Map;
 /**
  * Витамин D3
  * <p>
- * Формула из спецификации:
- * D3 = 200 + (weight * 15)
- * + (age > 50 ? 400 : 0)
- * + (sun_exposure < 15 ? 800 : 0)
- * + TSS_total * 15
+ * Формула:
+ * D3 = (вес × 20) + (возраст > 50 ? 1000 : 0) + (latitude > 40 ? 2000 : 0) + (SS + TSS) × 10 + 200 (доп. расход)
  * <p>
- * 15 МЕ/TSS — поправка на нагрузку.
+ * Группа 2: для силовых используем SS + TSS, для кардио только TSS.
+ * <p>
+ * Особенности:
+ * - latitude = 55.75 (Москва, >40 → низкая инсоляция)
  */
 @Component
 public class VitaminD3Formula implements ExplainableNutrientFormula {
@@ -28,50 +30,55 @@ public class VitaminD3Formula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        double weight = orDefault(ctx.getWeightKg(), 70.0);
-        int age = orDefaultInt(ctx.getAgeYears(), 30);
-        double sun = orDefault(ctx.getSunExposureMinutes(), 0.0);
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double weight = ctx.getWeightOrDefault(70.0);
+        int age = ctx.getAgeOrDefault(30);
+        double latitude = MvpConstants.LATITUDE;
 
-        double ageBonus = age > 50 ? 400.0 : 0.0;
-        double sunBonus = sun < 15.0 ? 800.0 : 0.0;
+        // Группа 2: силовая → SS + TSS, кардио → только TSS
+        double ss = 0.0;
+        double tss = ctx.getTssOrZero();
+        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
+            ss = ctx.getSsOrZero();
+        }
 
-        double value = 200 + weight * 15.0
+        // Модификаторы
+        double ageBonus = (age > 50) ? 1000.0 : 0.0;
+        double latitudeBonus = (latitude > 40) ? 2000.0 : 0.0;
+
+        double value = (weight * 20.0)
                 + ageBonus
-                + sunBonus
-                + tss * 15.0;
+                + latitudeBonus
+                + ((ss + tss) * 10.0);
+
+        // Дополнительный расход
+        value += MvpConstants.EXTRA_D3;
 
         return Math.max(value, 0.0);
     }
 
     @Override
     public String template() {
-        return "D3 = 200 + (weight_kg * 15) + age_bonus + sun_bonus + (tss_total * 15)";
+        return "D3 = (вес × 20) + age_bonus + latitude_bonus + ((SS + TSS) × 10) + 200";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        double weight = orDefault(ctx.getWeightKg(), 70.0);
-        int age = orDefaultInt(ctx.getAgeYears(), 30);
-        double sun = orDefault(ctx.getSunExposureMinutes(), 0.0);
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double weight = ctx.getWeightOrDefault(70.0);
+        int age = ctx.getAgeOrDefault(30);
+        double latitude = MvpConstants.LATITUDE;
 
-        double ageBonus = age > 50 ? 400.0 : 0.0;
-        double sunBonus = sun < 15.0 ? 800.0 : 0.0;
+        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
+        double tss = ctx.getTssOrZero();
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("weight_kg", weight);
-        vars.put("age_bonus", ageBonus);
-        vars.put("sun_bonus", sunBonus);
-        vars.put("tss_total", tss);
+        vars.put("weight", weight);
+        vars.put("age", age);
+        vars.put("age_bonus", age > 50 ? 1000.0 : 0.0);
+        vars.put("latitude", latitude);
+        vars.put("latitude_bonus", latitude > 40 ? 2000.0 : 0.0);
+        vars.put("SS", ss);
+        vars.put("TSS", tss);
+        vars.put("extra", MvpConstants.EXTRA_D3);
         return vars;
-    }
-
-    private double orDefault(Number n, double def) {
-        return n == null ? def : n.doubleValue();
-    }
-
-    private int orDefaultInt(Integer n, int def) {
-        return n == null ? def : n;
     }
 }

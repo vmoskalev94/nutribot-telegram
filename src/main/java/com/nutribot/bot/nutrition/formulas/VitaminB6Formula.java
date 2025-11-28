@@ -1,7 +1,9 @@
 package com.nutribot.bot.nutrition.formulas;
 
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
+import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
+import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -10,11 +12,12 @@ import java.util.Map;
 /**
  * Витамин B6
  * <p>
- * Формула из спецификации:
- * B6 = 0.02 * protein_intake + 0.5 + TSS_total * 0.15
+ * Формула:
+ * B6 = 0.015 × protein_intake + SS × 0.0001 + 0.4 (доп. расход)
  * <p>
- * MVP:
- * - protein_intake = 1.5 г на 1 кг веса.
+ * Особенности:
+ * - protein_intake = вес × 1.5 г
+ * - Только SS (для силовых), TSS не используется
  */
 @Component
 public class VitaminB6Formula implements ExplainableNutrientFormula {
@@ -26,37 +29,39 @@ public class VitaminB6Formula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        double weight = orDefault(ctx.getWeightKg(), 70.0);
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
-
+        double weight = ctx.getWeightOrDefault(70.0);
         double proteinIntake = weight * 1.5; // г/сутки
 
-        double value = 0.02 * proteinIntake
-                + 0.5
-                + tss * 0.15;
+        // SS только для силовых, для кардио = 0
+        double ss = 0.0;
+        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
+            ss = ctx.getSsOrZero();
+        }
+
+        double value = (0.015 * proteinIntake)
+                + (ss * 0.0001);
+
+        // Дополнительный расход
+        value += MvpConstants.EXTRA_B6;
 
         return Math.max(value, 0.0);
     }
 
     @Override
     public String template() {
-        return "B6 = (protein_intake_g * 0.02) + 0.5 + (tss_total * 0.15)";
+        return "B6 = (protein_intake × 0.015) + (SS × 0.0001) + 0.4";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        double weight = orDefault(ctx.getWeightKg(), 70.0);
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
-
+        double weight = ctx.getWeightOrDefault(70.0);
         double proteinIntake = weight * 1.5;
+        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("protein_intake_g", proteinIntake);
-        vars.put("tss_total", tss);
+        vars.put("protein_intake", proteinIntake);
+        vars.put("SS", ss);
+        vars.put("extra", MvpConstants.EXTRA_B6);
         return vars;
-    }
-
-    private double orDefault(Number n, double def) {
-        return n == null ? def : n.doubleValue();
     }
 }

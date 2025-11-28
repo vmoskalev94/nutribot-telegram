@@ -140,8 +140,16 @@ public class NutrientExplanationService {
             sb.append(" • RPE: ").append(ctx.getCardioRpe()).append("\n");
             hasWorkout = true;
         }
-        if (ctx.getTssTotal() != null) {
-            sb.append(" • TSS (суммарная нагрузка): ").append(formatAmount(ctx.getTssTotal())).append("\n");
+//        if (ctx.getTssTotal() != null) {
+//            sb.append(" • TSS (суммарная нагрузка): ").append(formatAmount(ctx.getTssTotal())).append("\n");
+//            hasWorkout = true;
+//        }
+        if (ctx.getTss() != null) {
+            sb.append(" • TSS: ").append(formatAmount(ctx.getTss())).append("\n");
+            hasWorkout = true;
+        }
+        if (ctx.getSs() != null) {
+            sb.append(" • SS: ").append(formatAmount(ctx.getSs())).append("\n");
             hasWorkout = true;
         }
         if (!hasWorkout) {

@@ -1,7 +1,9 @@
 package com.nutribot.bot.nutrition.formulas;
 
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
+import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
+import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -10,14 +12,15 @@ import java.util.Map;
 /**
  * Омега-3 (EPA + DHA)
  * <p>
- * Формула из спецификации:
- * OMEGA3 = (brain_weight * 0.5)
- * + (inflammation_level * 100)
- * + TSS_total * 45
+ * Формула:
+ * Ω3 = (omega3_index < 8 ? 2000 : 1000) + (CRP × 50) + (SS + TSS) × 0.03 + 300 (доп. расход)
  * <p>
- * MVP:
- * - brain_weight = 1000 + (0.7 * weight) + (0.5 * height) - (0.4 * age)
- * - inflammation_level = 1
+ * Особенности:
+ * - Комбинированный SS + TSS (нутриент связан с восстановлением мышц)
+ * - omega3_index = 5% (MVP)
+ * - CRP = 2.5 мг/л (MVP)
+ * - Для силовых: TSS = 0
+ * - Для кардио: SS = 0
  */
 @Component
 public class Omega3Formula implements ExplainableNutrientFormula {
@@ -29,63 +32,51 @@ public class Omega3Formula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        double weight = orDefault(ctx.getWeightKg(), 70.0);
-        int height = orDefaultInt(ctx.getHeightCm(), 175);
-        int age = orDefaultInt(ctx.getAgeYears(), 30);
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        // MVP-константы
+        double omega3Index = MvpConstants.OMEGA3_INDEX;
+        double crp = MvpConstants.CRP;
 
-        double brainWeight = 1000.0
-                + 0.7 * weight
-                + 0.5 * height
-                - 0.4 * age;
-
-        if (brainWeight < 0) {
-            brainWeight = 0.0;
+        // SS и TSS в зависимости от типа тренировки
+        double ss = 0.0;
+        double tss = 0.0;
+        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
+            ss = ctx.getSsOrZero();
+            // TSS = 0 для силовых (Ω3 в группе нейромышечных)
+        } else if (ctx.getWorkoutType() == WorkoutType.CARDIO) {
+            tss = ctx.getTssOrZero();
+            // SS = 0 для кардио
         }
 
-        double inflammationLevel = 1.0;
+        // Базовая формула
+        double baseValue = (omega3Index < 8) ? 2000.0 : 1000.0;
+        double value = baseValue
+                + (crp * 50.0)
+                + ((ss + tss) * 0.03);
 
-        double value = 300 + brainWeight * 0.5
-                + inflammationLevel * 100.0
-                + tss * 45.0;
+        // Дополнительный расход
+        value += MvpConstants.EXTRA_OMEGA3;
 
         return Math.max(value, 0.0);
     }
 
     @Override
     public String template() {
-        return "OMEGA3 = 300 + (brain_weight_g * 0.5) + (inflammation_level * 100) + (tss_total * 45)";
+        return "Ω3 = (omega3_index < 8 ? 2000 : 1000) + (CRP × 50) + ((SS + TSS) × 0.03) + 300";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        double weight = orDefault(ctx.getWeightKg(), 70.0);
-        int height = orDefaultInt(ctx.getHeightCm(), 175);
-        int age = orDefaultInt(ctx.getAgeYears(), 30);
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
-
-        double brainWeight = 1000.0
-                + 0.7 * weight
-                + 0.5 * height
-                - 0.4 * age;
-        if (brainWeight < 0) {
-            brainWeight = 0.0;
-        }
-
-        double inflammationLevel = 1.0;
+        double omega3Index = MvpConstants.OMEGA3_INDEX;
+        double crp = MvpConstants.CRP;
+        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
+        double tss = ctx.getWorkoutType() == WorkoutType.CARDIO ? ctx.getTssOrZero() : 0.0;
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("brain_weight_g", brainWeight);
-        vars.put("inflammation_level", inflammationLevel);
-        vars.put("tss_total", tss);
+        vars.put("omega3_index", omega3Index);
+        vars.put("CRP", crp);
+        vars.put("SS", ss);
+        vars.put("TSS", tss);
+        vars.put("extra", MvpConstants.EXTRA_OMEGA3);
         return vars;
-    }
-
-    private double orDefault(Number n, double def) {
-        return n == null ? def : n.doubleValue();
-    }
-
-    private int orDefaultInt(Integer n, int def) {
-        return n == null ? def : n;
     }
 }

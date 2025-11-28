@@ -1,7 +1,9 @@
 package com.nutribot.bot.nutrition.formulas;
 
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
+import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
+import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -10,14 +12,14 @@ import java.util.Map;
 /**
  * Йод (I)
  * <p>
- * Формула из спецификации:
- * I = (thyroid_hormones * 25)
- * + (goiter_risk * 50)
- * + TSS_total * 0.4
+ * Формула:
+ * I = (thyroid_volume × 0.4) + (беременность ? 150 : 0) + (SS > 20000 ? 40 : 0) + 15 (доп. расход)
  * <p>
- * MVP:
- * - thyroid_hormones = 1
- * - goiter_risk: мужчины 0, женщины 1.
+ * Группа 2: для силовых используем SS, для кардио SS = 0.
+ * <p>
+ * Особенности:
+ * - thyroid_volume = 1 мл (MVP)
+ * - SS > 20000 — высокоинтенсивные силовые тренировки
  */
 @Component
 public class IodineFormula implements ExplainableNutrientFormula {
@@ -29,49 +31,48 @@ public class IodineFormula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        String sex = ctx.getSex();
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double thyroidVolume = MvpConstants.THYROID_VOLUME;
+        boolean isPregnant = ctx.isPregnant();
 
-        double thyroidHormones = 1.0;
+        // Группа 2: силовая → SS, кардио → SS = 0
+        double ss = 0.0;
+        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
+            ss = ctx.getSsOrZero();
+        }
 
-        boolean female = isFemale(sex);
-        int goiterRisk = female ? 1 : 0;
+        // Модификаторы
+        double pregnancyBonus = isPregnant ? 150.0 : 0.0;
+        double highIntensityBonus = (ss > 20000) ? 40.0 : 0.0;
 
-        double value = thyroidHormones * 25.0
-                + goiterRisk * 50.0
-                + tss * 0.4;
+        double value = (thyroidVolume * 0.4)
+                + pregnancyBonus
+                + highIntensityBonus;
+
+        // Дополнительный расход
+        value += MvpConstants.EXTRA_I;
 
         return Math.max(value, 0.0);
     }
 
     @Override
     public String template() {
-        return "I = (thyroid_hormones * 25) + (goiter_risk * 50) + (tss_total * 0.4)";
+        return "I = (thyroid_volume × 0.4) + pregnancy_bonus + high_intensity_bonus + 15";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        String sex = ctx.getSex();
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double thyroidVolume = MvpConstants.THYROID_VOLUME;
+        boolean isPregnant = ctx.isPregnant();
 
-        double thyroidHormones = 1.0;
-        boolean female = isFemale(sex);
-        int goiterRisk = female ? 1 : 0;
+        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("thyroid_hormones", thyroidHormones);
-        vars.put("goiter_risk", goiterRisk);
-        vars.put("tss_total", tss);
+        vars.put("thyroid_volume", thyroidVolume);
+        vars.put("is_pregnant", isPregnant);
+        vars.put("pregnancy_bonus", isPregnant ? 150.0 : 0.0);
+        vars.put("SS", ss);
+        vars.put("high_intensity_bonus", ss > 20000 ? 40.0 : 0.0);
+        vars.put("extra", MvpConstants.EXTRA_I);
         return vars;
-    }
-
-    private double orDefault(Number n, double def) {
-        return n == null ? def : n.doubleValue();
-    }
-
-    private boolean isFemale(String sex) {
-        if (sex == null) return false;
-        String s = sex.trim().toUpperCase();
-        return s.startsWith("F") || s.startsWith("Ж");
     }
 }

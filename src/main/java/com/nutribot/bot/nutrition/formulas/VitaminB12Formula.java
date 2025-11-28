@@ -1,7 +1,9 @@
 package com.nutribot.bot.nutrition.formulas;
 
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
+import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
+import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -10,14 +12,14 @@ import java.util.Map;
 /**
  * Витамин B12
  * <p>
- * Формула из спецификации:
- * B12 = (stomach_ph > 4 ? 2.4 : 5.0)
- * + (vegan_years * 0.5)
- * + TSS_total * 0.1
+ * Формула:
+ * B12 = (homocysteine > 12 ? 5.0 : 2.4) + (vegan_years × 0.5) + (SS + TSS) × 0.1 + 0.3 (доп. расход)
  * <p>
- * MVP:
- * - stomach_ph = 1.8 → всегда берём 5.0
- * - vegan_years = 0
+ * Группа 2: для силовых используем SS + TSS, для кардио только TSS.
+ * <p>
+ * Особенности:
+ * - homocysteine = 8 мкмоль/л (MVP)
+ * - vegan_years = 0 для не-веганов
  */
 @Component
 public class VitaminB12Formula implements ExplainableNutrientFormula {
@@ -29,41 +31,50 @@ public class VitaminB12Formula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double homocysteine = MvpConstants.HOMOCYSTEINE;
+        double veganYears = ctx.isVegan() ? 1.0 : MvpConstants.VEGAN_YEARS_DEFAULT;
 
-        double stomachPh = 1.8;
-        double veganYears = 0.0;
+        // Группа 2: силовая → SS + TSS, кардио → только TSS
+        double ss = 0.0;
+        double tss = ctx.getTssOrZero();
+        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
+            ss = ctx.getSsOrZero();
+        }
 
-        double stomachTerm = stomachPh > 4.0 ? 2.4 : 5.0;
+        // Базовое значение по гомоцистеину
+        double baseValue = (homocysteine > 12) ? 5.0 : 2.4;
 
-        double value = stomachTerm
-                + veganYears * 0.5
-                + tss * 0.1;
+        double value = baseValue
+                + (veganYears * 0.5)
+                + ((ss + tss) * 0.1);
+
+        // Дополнительный расход
+        value += MvpConstants.EXTRA_B12;
 
         return Math.max(value, 0.0);
     }
 
     @Override
     public String template() {
-        return "B12 = stomach_term + (vegan_years * 0.5) + (tss_total * 0.1)";
+        return "B12 = homocysteine_bonus + (vegan_years × 0.5) + ((SS + TSS) × 0.1) + 0.3";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
-        double stomachPh = 1.8;
-        double veganYears = 0.0;
-        double stomachTerm = stomachPh > 4.0 ? 2.4 : 5.0;
+        double homocysteine = MvpConstants.HOMOCYSTEINE;
+        double veganYears = ctx.isVegan() ? 1.0 : MvpConstants.VEGAN_YEARS_DEFAULT;
+        double baseValue = (homocysteine > 12) ? 5.0 : 2.4;
+
+        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
+        double tss = ctx.getTssOrZero();
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("stomach_term", stomachTerm);
-        vars.put("stomach_ph", stomachPh);
+        vars.put("homocysteine", homocysteine);
+        vars.put("homocysteine_bonus", baseValue);
         vars.put("vegan_years", veganYears);
-        vars.put("tss_total", tss);
+        vars.put("SS", ss);
+        vars.put("TSS", tss);
+        vars.put("extra", MvpConstants.EXTRA_B12);
         return vars;
-    }
-
-    private double orDefault(Number n, double def) {
-        return n == null ? def : n.doubleValue();
     }
 }

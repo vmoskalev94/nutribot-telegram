@@ -1,7 +1,9 @@
 package com.nutribot.bot.nutrition.formulas;
 
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
+import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
+import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -10,17 +12,14 @@ import java.util.Map;
 /**
  * Витамин K
  * <p>
- * Формула из спецификации:
- * K = (vascular_length * 0.0001)
- * + (warfarin_dose * 20)
- * + TSS_total * 0.05
+ * Формула:
+ * K = (bone_mass × 0.05) + SS × 0.0001 + (warfarin ? 100 : 0) + 20 (доп. расход)
  * <p>
- * MVP:
- * - warfarin_dose = 0
- * - vascular_length:
- * мужчины: ~210_000
- * женщины: ~190_000
- * (без поправок на эндоморф/выносливость).
+ * Группа 2: для силовых используем SS, для кардио SS = 0.
+ * <p>
+ * Особенности:
+ * - bone_mass из контекста
+ * - warfarin = false (MVP)
  */
 @Component
 public class VitaminKFormula implements ExplainableNutrientFormula {
@@ -32,64 +31,45 @@ public class VitaminKFormula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        String sex = ctx.getSex();
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double boneMass = ctx.getBoneMassOrDefault(3.0);
+        boolean warfarin = MvpConstants.WARFARIN;
 
-        boolean male = isMale(sex);
-        boolean female = isFemale(sex);
-        if (!male && !female) {
-            male = true;
+        // Группа 2: силовая → SS, кардио → SS = 0
+        double ss = 0.0;
+        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
+            ss = ctx.getSsOrZero();
         }
 
-        double vascularLength = male ? 210_000.0 : 190_000.0;
-        double warfarinDose = 0.0;
+        double warfarinBonus = warfarin ? 100.0 : 0.0;
 
-        double value = vascularLength * 0.0001
-                + warfarinDose * 20.0
-                + tss * 0.05;
+        double value = (boneMass * 0.05)
+                + (ss * 0.0001)
+                + warfarinBonus;
+
+        // Дополнительный расход
+        value += MvpConstants.EXTRA_K;
 
         return Math.max(value, 0.0);
     }
 
     @Override
     public String template() {
-        return "K = (vascular_length * 0.0001) + (warfarin_dose * 20) + (tss_total * 0.05)";
+        return "K = (bone_mass × 0.05) + (SS × 0.0001) + warfarin_bonus + 20";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        String sex = ctx.getSex();
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double boneMass = ctx.getBoneMassOrDefault(3.0);
+        boolean warfarin = MvpConstants.WARFARIN;
 
-        boolean male = isMale(sex);
-        boolean female = isFemale(sex);
-        if (!male && !female) {
-            male = true;
-        }
-
-        double vascularLength = male ? 210_000.0 : 190_000.0;
-        double warfarinDose = 0.0;
+        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("vascular_length", vascularLength);
-        vars.put("warfarin_dose", warfarinDose);
-        vars.put("tss_total", tss);
+        vars.put("bone_mass", boneMass);
+        vars.put("SS", ss);
+        vars.put("warfarin", warfarin);
+        vars.put("warfarin_bonus", warfarin ? 100.0 : 0.0);
+        vars.put("extra", MvpConstants.EXTRA_K);
         return vars;
-    }
-
-    private double orDefault(Number n, double def) {
-        return n == null ? def : n.doubleValue();
-    }
-
-    private boolean isMale(String sex) {
-        if (sex == null) return false;
-        String s = sex.trim().toUpperCase();
-        return s.startsWith("M") || s.startsWith("М");
-    }
-
-    private boolean isFemale(String sex) {
-        if (sex == null) return false;
-        String s = sex.trim().toUpperCase();
-        return s.startsWith("F") || s.startsWith("Ж");
     }
 }

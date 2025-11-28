@@ -1,7 +1,9 @@
 package com.nutribot.bot.nutrition.formulas;
 
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
+import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
+import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -10,16 +12,13 @@ import java.util.Map;
 /**
  * Витамин E
  * <p>
- * Формула из спецификации:
- * E = (cell_membrane_area * 0.002)
- * + (radiation_exposure * 10)
- * + TSS_total * 0.6
+ * Формула:
+ * E = (FFM × 0.8) + (pollution_level × 20) + (SS + TSS) × 0.0008 + 3 (доп. расход)
  * <p>
- * MVP:
- * - cell_membrane_area:
- * мужчины: 115
- * женщины: 100
- * - radiation_exposure = 0
+ * Группа 2: для силовых используем SS + TSS, для кардио только TSS.
+ * <p>
+ * Особенности:
+ * - pollution_level = 2 (MVP)
  */
 @Component
 public class VitaminEFormula implements ExplainableNutrientFormula {
@@ -31,64 +30,45 @@ public class VitaminEFormula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        String sex = ctx.getSex();
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double ffm = ctx.getFfmOrDefault(50.0);
+        double pollutionLevel = MvpConstants.POLLUTION_LEVEL;
 
-        boolean male = isMale(sex);
-        boolean female = isFemale(sex);
-        if (!male && !female) {
-            male = true;
+        // Группа 2: силовая → SS + TSS, кардио → только TSS
+        double ss = 0.0;
+        double tss = ctx.getTssOrZero();
+        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
+            ss = ctx.getSsOrZero();
         }
 
-        double cellMembraneArea = male ? 115.0 : 100.0;
-        double radiationExposure = 0.0;
+        double value = (ffm * 0.8)
+                + (pollutionLevel * 20.0)
+                + ((ss + tss) * 0.0008);
 
-        double value = cellMembraneArea * 0.002
-                + radiationExposure * 10.0
-                + tss * 0.6;
+        // Дополнительный расход
+        value += MvpConstants.EXTRA_E;
 
         return Math.max(value, 0.0);
     }
 
     @Override
     public String template() {
-        return "E = (cell_membrane_area * 0.002) + (radiation_exposure * 10) + (tss_total * 0.6)";
+        return "E = (FFM × 0.8) + (pollution_level × 20) + ((SS + TSS) × 0.0008) + 3";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        String sex = ctx.getSex();
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double ffm = ctx.getFfmOrDefault(50.0);
+        double pollutionLevel = MvpConstants.POLLUTION_LEVEL;
 
-        boolean male = isMale(sex);
-        boolean female = isFemale(sex);
-        if (!male && !female) {
-            male = true;
-        }
-
-        double cellMembraneArea = male ? 115.0 : 100.0;
-        double radiationExposure = 0.0;
+        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
+        double tss = ctx.getTssOrZero();
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("cell_membrane_area", cellMembraneArea);
-        vars.put("radiation_exposure", radiationExposure);
-        vars.put("tss_total", tss);
+        vars.put("FFM", ffm);
+        vars.put("pollution_level", pollutionLevel);
+        vars.put("SS", ss);
+        vars.put("TSS", tss);
+        vars.put("extra", MvpConstants.EXTRA_E);
         return vars;
-    }
-
-    private double orDefault(Number n, double def) {
-        return n == null ? def : n.doubleValue();
-    }
-
-    private boolean isMale(String sex) {
-        if (sex == null) return false;
-        String s = sex.trim().toUpperCase();
-        return s.startsWith("M") || s.startsWith("М");
-    }
-
-    private boolean isFemale(String sex) {
-        if (sex == null) return false;
-        String s = sex.trim().toUpperCase();
-        return s.startsWith("F") || s.startsWith("Ж");
     }
 }

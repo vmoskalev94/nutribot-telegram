@@ -1,7 +1,9 @@
 package com.nutribot.bot.nutrition.formulas;
 
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
+import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
+import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -10,15 +12,15 @@ import java.util.Map;
 /**
  * Витамин C
  * <p>
- * Формула из спецификации:
- * C = (weight * 1.2)
- * + (smoke_packs * 35)
- * + (pollution_level * 20)
- * + TSS_total * 8
+ * Формула:
+ * C = (вес × 1.0) + (smoke_packs × 50) + (AQI × 0.1) + (SS + TSS) × 0.005 + 35 (доп. расход)
  * <p>
- * MVP:
- * - smoke_packs берём из контекста (packs/день).
- * - pollution_level = 37 (для Москвы, пока константа).
+ * Особенности:
+ * - Комбинированный SS + TSS (антиоксидантная защита)
+ * - smoke_packs из lifestyle
+ * - AQI = 41 (MVP)
+ * - Для силовых: TSS = 0
+ * - Для кардио: SS = 0
  */
 @Component
 public class VitaminCFormula implements ExplainableNutrientFormula {
@@ -30,41 +32,52 @@ public class VitaminCFormula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        double weight = orDefault(ctx.getWeightKg(), 70.0);
-        double smokePacks = orDefault(ctx.getSmokePacksPerDay(), 0.0);
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
+        double weight = ctx.getWeightOrDefault(70.0);
+        double smokePacks = ctx.getSmokePacksOrZero();
+        double aqi = MvpConstants.AQI;
 
-        double pollutionLevel = 37.0; // MVP: константа
+        // SS и TSS в зависимости от типа тренировки
+        double ss = 0.0;
+        double tss = 0.0;
+        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
+            ss = ctx.getSsOrZero();
+            // TSS = 0 для силовых (Vit C в группе нейромышечных)
+        } else if (ctx.getWorkoutType() == WorkoutType.CARDIO) {
+            tss = ctx.getTssOrZero();
+            // SS = 0 для кардио
+        }
 
-        double value = weight * 1.2
-                + smokePacks * 35.0
-                + pollutionLevel * 20.0
-                + tss * 8.0;
+        double value = (weight * 1.0)
+                + (smokePacks * 50.0)
+                + (aqi * 0.1)
+                + ((ss + tss) * 0.005);
+
+        // Дополнительный расход
+        value += MvpConstants.EXTRA_C;
 
         return Math.max(value, 0.0);
     }
 
     @Override
     public String template() {
-        return "C = (weight_kg * 1.2) + (smoke_packs * 35) + (pollution_level * 20) + (tss_total * 8)";
+        return "C = (вес × 1.0) + (smoke_packs × 50) + (AQI × 0.1) + ((SS + TSS) × 0.005) + 35";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        double weight = orDefault(ctx.getWeightKg(), 70.0);
-        double smokePacks = orDefault(ctx.getSmokePacksPerDay(), 0.0);
-        double tss = orDefault(ctx.getTssTotal(), 0.0);
-        double pollutionLevel = 37.0;
+        double weight = ctx.getWeightOrDefault(70.0);
+        double smokePacks = ctx.getSmokePacksOrZero();
+        double aqi = MvpConstants.AQI;
+        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
+        double tss = ctx.getWorkoutType() == WorkoutType.CARDIO ? ctx.getTssOrZero() : 0.0;
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("weight_kg", weight);
+        vars.put("weight", weight);
         vars.put("smoke_packs", smokePacks);
-        vars.put("pollution_level", pollutionLevel);
-        vars.put("tss_total", tss);
+        vars.put("AQI", aqi);
+        vars.put("SS", ss);
+        vars.put("TSS", tss);
+        vars.put("extra", MvpConstants.EXTRA_C);
         return vars;
-    }
-
-    private double orDefault(Number n, double def) {
-        return n == null ? def : n.doubleValue();
     }
 }

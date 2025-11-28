@@ -133,8 +133,20 @@ public class NutrientCalculatorService {
             }
         }
 
-        // TSS
-        double tssTotal = tssService.calculateTotalTss(details);
+        // Определяем пол и уровень подготовки
+        boolean isMale = BodyCompositionCalculator.isMale(user.getSex());
+        boolean isAthlete = BodyCompositionCalculator.isAthlete(user.getTrainingLevel());
+
+        // SS и TSS — новые метрики нагрузки
+        double ss = tssService.calculateSs(details);
+        double tss = tssService.calculateTss(details, user.getAge());
+
+        // Производные показатели тела
+        double ffm = BodyCompositionCalculator.calculateFfm(
+                user.getWeightKg(), user.getHeightCm(), isMale, isAthlete);
+        double boneMass = BodyCompositionCalculator.calculateBoneMass(
+                user.getWeightKg(), user.getHeightCm(), isMale);
+        double sweatRate = BodyCompositionCalculator.calculateSweatRate(isMale);
 
         // Lifestyle
         UserLifestyle lifestyle = userLifestyleService.findByUserId(user.getId()).orElse(null);
@@ -144,26 +156,35 @@ public class NutrientCalculatorService {
         boolean vegan = lifestyle != null && Boolean.TRUE.equals(lifestyle.getVegan());
         boolean pregnant = lifestyle != null && Boolean.TRUE.equals(lifestyle.getPregnant());
 
-        // Солнце: на MVP = 0 (мрак на улице)
-        double sunExposureMinutes = 0.0;
-
         return NutrientContext.builder()
                 .userId(user.getId())
                 .workoutId(workout.getId())
-                .sex(user.getSex())                 // String
+                // Профиль
+                .sex(user.getSex())
                 .ageYears(user.getAge())
                 .weightKg(user.getWeightKg())
                 .heightCm(user.getHeightCm())
-                .trainingLevel(user.getTrainingLevel()) // String
+                .trainingLevel(user.getTrainingLevel())
+                // Вспомогательные флаги
+                .male(isMale)
+                .athlete(isAthlete)
+                // Тренировка
                 .workoutType(type)
                 .durationMin(durationMin)
                 .distanceKm(distanceKm)
                 .cardioRpe(cardioRpe)
-                .tssTotal(tssTotal)
+                // Метрики нагрузки
+                .ss(ss)
+                .tss(tss)
+                .tssTotal(ss + tss) // deprecated, для обратной совместимости
+                // Показатели тела
+                .ffm(ffm)
+                .boneMass(boneMass)
+                .sweatRate(sweatRate)
+                // Lifestyle
                 .smokePacksPerDay(smokePacksPerDay)
                 .vegan(vegan)
                 .pregnant(pregnant)
-                .sunExposureMinutes(sunExposureMinutes)
                 .build();
     }
 }
