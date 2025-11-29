@@ -12,13 +12,20 @@ import java.util.Map;
 /**
  * Омега-3 (EPA + DHA)
  * <p>
- * Формула:
- * Ω3 = (omega3_index < 8 ? 2000 : 1000) + (CRP × 50) + (SS + TSS) × 0.03 + 300 (доп. расход)
+ * Формула (PDF):
+ * Ω3 = clamp(base_by_index + CRP×20 + (SS+TSS)×0.01 + EXTRA,
+ *            MIN=250, MAX=3000)
+ * <p>
+ * где base_by_index:
+ *   omega3_index < 4  → 2000
+ *   omega3_index < 6  → 1500
+ *   omega3_index < 8  → 1000
+ *   omega3_index >= 8 → 500
+ * <p>
+ * Единицы: мг
+ * Синергия с витамином E и селеном.
  * <p>
  * Особенности:
- * - Комбинированный SS + TSS (нутриент связан с восстановлением мышц)
- * - omega3_index = 5% (MVP)
- * - CRP = 2.5 мг/л (MVP)
  * - Для силовых: TSS = 0
  * - Для кардио: SS = 0
  */
@@ -32,7 +39,6 @@ public class Omega3Formula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        // MVP-константы
         double omega3Index = MvpConstants.OMEGA3_INDEX;
         double crp = MvpConstants.CRP;
 
@@ -41,27 +47,37 @@ public class Omega3Formula implements ExplainableNutrientFormula {
         double tss = 0.0;
         if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
             ss = ctx.getSsOrZero();
-            // TSS = 0 для силовых (Ω3 в группе нейромышечных)
         } else if (ctx.getWorkoutType() == WorkoutType.CARDIO) {
             tss = ctx.getTssOrZero();
-            // SS = 0 для кардио
         }
 
-        // Базовая формула
-        double baseValue = (omega3Index < 8) ? 2000.0 : 1000.0;
+        // Базовое значение по omega3_index (PDF)
+        double baseValue;
+        if (omega3Index < 4) {
+            baseValue = 2000.0;
+        } else if (omega3Index < 6) {
+            baseValue = 1500.0;
+        } else if (omega3Index < 8) {
+            baseValue = 1000.0;
+        } else {
+            baseValue = 500.0;
+        }
+
+        // Формула по PDF
         double value = baseValue
-                + (crp * 50.0)
-                + ((ss + tss) * 0.03);
+                + (crp * 20.0)
+                + ((ss + tss) * 0.01);
 
         // Дополнительный расход
         value += MvpConstants.EXTRA_OMEGA3;
 
-        return Math.max(value, 0.0);
+        // Clamp в диапазон [MIN, MAX]
+        return NutrientLimits.clamp(value, NutrientLimits.OMEGA3_MIN, NutrientLimits.OMEGA3_MAX);
     }
 
     @Override
     public String template() {
-        return "Ω3 = (omega3_index < 8 ? 2000 : 1000) + (CRP × 50) + ((SS + TSS) × 0.03) + 300";
+        return "Ω3 = clamp(base_by_index + CRP×20 + (SS+TSS)×0.01 + extra, 250, 3000)";
     }
 
     @Override
@@ -71,12 +87,26 @@ public class Omega3Formula implements ExplainableNutrientFormula {
         double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
         double tss = ctx.getWorkoutType() == WorkoutType.CARDIO ? ctx.getTssOrZero() : 0.0;
 
+        double baseValue;
+        if (omega3Index < 4) {
+            baseValue = 2000.0;
+        } else if (omega3Index < 6) {
+            baseValue = 1500.0;
+        } else if (omega3Index < 8) {
+            baseValue = 1000.0;
+        } else {
+            baseValue = 500.0;
+        }
+
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("omega3_index", omega3Index);
+        vars.put("base_by_index", baseValue);
         vars.put("CRP", crp);
         vars.put("SS", ss);
         vars.put("TSS", tss);
         vars.put("extra", MvpConstants.EXTRA_OMEGA3);
+        vars.put("min", NutrientLimits.OMEGA3_MIN);
+        vars.put("max", NutrientLimits.OMEGA3_MAX);
         return vars;
     }
 }

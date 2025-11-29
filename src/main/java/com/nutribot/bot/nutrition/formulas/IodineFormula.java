@@ -3,7 +3,6 @@ package com.nutribot.bot.nutrition.formulas;
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
 import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
-import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -12,14 +11,15 @@ import java.util.Map;
 /**
  * Йод (I)
  * <p>
- * Формула:
- * I = (thyroid_volume × 0.4) + (беременность ? 150 : 0) + (SS > 20000 ? 40 : 0) + 15 (доп. расход)
+ * Формула (PDF):
+ * I = clamp(150 + thyroid_volume×2 + (pregnancy ? 100 : 0) + EXTRA,
+ *           MIN=150, MAX=1100)
  * <p>
- * Группа 2: для силовых используем SS, для кардио SS = 0.
+ * Единицы: мкг
+ * Синергия с селеном. Избыток — риск тиреоидита.
  * <p>
  * Особенности:
  * - thyroid_volume = 1 мл (MVP)
- * - SS > 20000 — высокоинтенсивные силовые тренировки
  */
 @Component
 public class IodineFormula implements ExplainableNutrientFormula {
@@ -34,29 +34,25 @@ public class IodineFormula implements ExplainableNutrientFormula {
         double thyroidVolume = MvpConstants.THYROID_VOLUME;
         boolean isPregnant = ctx.isPregnant();
 
-        // Группа 2: силовая → SS, кардио → SS = 0
-        double ss = 0.0;
-        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
-            ss = ctx.getSsOrZero();
+        // Базовая формула по PDF
+        double value = 150.0
+                + (thyroidVolume * 2.0);
+
+        // Модификатор беременности
+        if (isPregnant) {
+            value += 100.0;
         }
-
-        // Модификаторы
-        double pregnancyBonus = isPregnant ? 150.0 : 0.0;
-        double highIntensityBonus = (ss > 20000) ? 40.0 : 0.0;
-
-        double value = (thyroidVolume * 0.4)
-                + pregnancyBonus
-                + highIntensityBonus;
 
         // Дополнительный расход
         value += MvpConstants.EXTRA_I;
 
-        return Math.max(value, 0.0);
+        // Clamp в диапазон [MIN, MAX]
+        return NutrientLimits.clamp(value, NutrientLimits.I_MIN, NutrientLimits.I_MAX);
     }
 
     @Override
     public String template() {
-        return "I = (thyroid_volume × 0.4) + pregnancy_bonus + high_intensity_bonus + 15";
+        return "I = clamp(150 + thyroid_volume×2 + pregnancy_bonus + extra, 150, 1100)";
     }
 
     @Override
@@ -64,15 +60,13 @@ public class IodineFormula implements ExplainableNutrientFormula {
         double thyroidVolume = MvpConstants.THYROID_VOLUME;
         boolean isPregnant = ctx.isPregnant();
 
-        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
-
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("thyroid_volume", thyroidVolume);
         vars.put("is_pregnant", isPregnant);
-        vars.put("pregnancy_bonus", isPregnant ? 150.0 : 0.0);
-        vars.put("SS", ss);
-        vars.put("high_intensity_bonus", ss > 20000 ? 40.0 : 0.0);
+        vars.put("pregnancy_bonus", isPregnant ? 100.0 : 0.0);
         vars.put("extra", MvpConstants.EXTRA_I);
+        vars.put("min", NutrientLimits.I_MIN);
+        vars.put("max", NutrientLimits.I_MAX);
         return vars;
     }
 }

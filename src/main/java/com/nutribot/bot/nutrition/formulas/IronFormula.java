@@ -3,7 +3,6 @@ package com.nutribot.bot.nutrition.formulas;
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
 import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
-import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -12,14 +11,12 @@ import java.util.Map;
 /**
  * Железо (Fe)
  * <p>
- * Формула:
- * Fe = (FFM × 0.1) + (blood_donation × 50) + TSS × 0.5 + (женщина ? menstrual_loss × 0.5 : 0) + 0.8 (доп. расход)
+ * Формула (PDF):
+ * Fe = clamp(8 + TSS×0.005 + CRP×0.2 + EXTRA,
+ *            MIN=6, MAX=20)
  * <p>
- * Группа 2: для силовых используем SS + TSS, для кардио только TSS.
- * <p>
- * Особенности:
- * - blood_donation = 0 (MVP)
- * - menstrual_loss = 30 мл/цикл (MVP)
+ * Единицы: мг
+ * Потери при аэробной нагрузке. Не использовать SS.
  */
 @Component
 public class IronFormula implements ExplainableNutrientFormula {
@@ -31,57 +28,37 @@ public class IronFormula implements ExplainableNutrientFormula {
 
     @Override
     public double calculate(NutrientContext ctx) {
-        double ffm = ctx.getFfmOrDefault(50.0);
-        double bloodDonation = MvpConstants.BLOOD_DONATION;
-        boolean isFemale = !ctx.isMale();
-        double menstrualLoss = MvpConstants.MENSTRUAL_LOSS;
-
-        // Группа 2: силовая → SS + TSS, кардио → только TSS
-        double ss = 0.0;
+        double crp = MvpConstants.CRP;
         double tss = ctx.getTssOrZero();
-        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
-            ss = ctx.getSsOrZero();
-        }
 
-        double value = (ffm * 0.1)
-                + (bloodDonation * 50.0)
-                + ((ss + tss) * 0.5);
-
-        // Учёт менструальных потерь для женщин
-        if (isFemale) {
-            value += menstrualLoss * 0.5;
-        }
+        // Базовая формула по PDF
+        double value = 8.0
+                + (tss * 0.005)
+                + (crp * 0.2);
 
         // Дополнительный расход
         value += MvpConstants.EXTRA_FE;
 
-        return Math.max(value, 0.0);
+        // Clamp в диапазон [MIN, MAX]
+        return NutrientLimits.clamp(value, NutrientLimits.FE_MIN, NutrientLimits.FE_MAX);
     }
 
     @Override
     public String template() {
-        return "Fe = (FFM × 0.1) + (blood_donation × 50) + ((SS + TSS) × 0.5) + menstrual_bonus + 0.8";
+        return "Fe = clamp(8 + TSS×0.005 + CRP×0.2 + extra, 6, 20)";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
-        double ffm = ctx.getFfmOrDefault(50.0);
-        double bloodDonation = MvpConstants.BLOOD_DONATION;
-        boolean isFemale = !ctx.isMale();
-        double menstrualLoss = MvpConstants.MENSTRUAL_LOSS;
-
-        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
+        double crp = MvpConstants.CRP;
         double tss = ctx.getTssOrZero();
 
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("FFM", ffm);
-        vars.put("blood_donation", bloodDonation);
-        vars.put("SS", ss);
         vars.put("TSS", tss);
-        vars.put("is_female", isFemale);
-        vars.put("menstrual_loss", menstrualLoss);
-        vars.put("menstrual_bonus", isFemale ? menstrualLoss * 0.5 : 0.0);
+        vars.put("CRP", crp);
         vars.put("extra", MvpConstants.EXTRA_FE);
+        vars.put("min", NutrientLimits.FE_MIN);
+        vars.put("max", NutrientLimits.FE_MAX);
         return vars;
     }
 }

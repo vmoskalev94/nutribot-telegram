@@ -138,6 +138,17 @@ public final class MvpConstants {
     // ==================== Таблицы по группам ====================
 
     /**
+     * Потребление белка в г/сутки.
+     * Рассчитывается как вес × 1.5 (типичная норма для спортсменов).
+     *
+     * @param weightKg вес в кг
+     * @return потребление белка в г/сутки
+     */
+    public static double getProteinIntake(double weightKg) {
+        return weightKg * 1.5;
+    }
+
+    /**
      * Церулоплазмин в мг/дл по группам.
      */
     public static double getCeruloplasmin(boolean isMale, boolean isPregnant, boolean isAthlete, boolean isVegan) {

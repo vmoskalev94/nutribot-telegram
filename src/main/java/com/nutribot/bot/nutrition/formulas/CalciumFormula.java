@@ -3,7 +3,6 @@ package com.nutribot.bot.nutrition.formulas;
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
 import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
-import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -12,13 +11,12 @@ import java.util.Map;
 /**
  * Кальций (Ca)
  * <p>
- * Формула:
- * Ca = 5 × bone_mass + (беременность ? 300 : 0) + (SS + TSS) × 10 + 15 (доп. расход)
+ * Формула (PDF):
+ * Ca = clamp(1000 + bone_mass×10 + TSS×0.1 + EXTRA,
+ *            MIN=800, MAX=2500)
  * <p>
- * Группа 2: для силовых используем SS + TSS, для кардио только TSS.
- * <p>
- * Особенности:
- * - bone_mass рассчитывается в BodyCompositionCalculator и передаётся в контексте
+ * Единицы: мг
+ * Синергия с D3 и K2. Избыток — риск камней.
  */
 @Component
 public class CalciumFormula implements ExplainableNutrientFormula {
@@ -31,47 +29,36 @@ public class CalciumFormula implements ExplainableNutrientFormula {
     @Override
     public double calculate(NutrientContext ctx) {
         double boneMass = ctx.getBoneMassOrDefault(3.0);
-        boolean isPregnant = ctx.isPregnant();
-
-        // Группа 2: силовая → SS + TSS, кардио → только TSS
-        double ss = 0.0;
         double tss = ctx.getTssOrZero();
-        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
-            ss = ctx.getSsOrZero();
-        }
 
-        double pregnancyBonus = isPregnant ? 300.0 : 0.0;
-
-        double value = (boneMass * 5.0)
-                + pregnancyBonus
-                + ((ss + tss) * 10.0);
+        // Базовая формула по PDF
+        double value = 1000.0
+                + (boneMass * 10.0)
+                + (tss * 0.1);
 
         // Дополнительный расход
         value += MvpConstants.EXTRA_CA;
 
-        return Math.max(value, 0.0);
+        // Clamp в диапазон [MIN, MAX]
+        return NutrientLimits.clamp(value, NutrientLimits.CA_MIN, NutrientLimits.CA_MAX);
     }
 
     @Override
     public String template() {
-        return "Ca = (bone_mass × 5) + pregnancy_bonus + ((SS + TSS) × 10) + 15";
+        return "Ca = clamp(1000 + bone_mass×10 + TSS×0.1 + extra, 800, 2500)";
     }
 
     @Override
     public Map<String, Object> vars(NutrientContext ctx) {
         double boneMass = ctx.getBoneMassOrDefault(3.0);
-        boolean isPregnant = ctx.isPregnant();
-
-        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
         double tss = ctx.getTssOrZero();
 
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("bone_mass", boneMass);
-        vars.put("is_pregnant", isPregnant);
-        vars.put("pregnancy_bonus", isPregnant ? 300.0 : 0.0);
-        vars.put("SS", ss);
         vars.put("TSS", tss);
         vars.put("extra", MvpConstants.EXTRA_CA);
+        vars.put("min", NutrientLimits.CA_MIN);
+        vars.put("max", NutrientLimits.CA_MAX);
         return vars;
     }
 }

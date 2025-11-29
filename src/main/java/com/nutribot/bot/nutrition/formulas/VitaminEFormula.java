@@ -12,13 +12,16 @@ import java.util.Map;
 /**
  * Витамин E
  * <p>
- * Формула:
- * E = (FFM × 0.8) + (pollution_level × 20) + (SS + TSS) × 0.0008 + 3 (доп. расход)
+ * Формула (PDF):
+ * E = clamp(15 + FFM×0.1 + pollution_level×2 + (SS+TSS)×0.00005 + EXTRA,
+ *           MIN=15, MAX=1000)
  * <p>
- * Группа 2: для силовых используем SS + TSS, для кардио только TSS.
+ * Единицы: мг
+ * Синергия с витамином C и селеном.
  * <p>
  * Особенности:
  * - pollution_level = 2 (MVP)
+ * - Группа 2: для силовых используем SS + TSS, для кардио только TSS
  */
 @Component
 public class VitaminEFormula implements ExplainableNutrientFormula {
@@ -33,26 +36,29 @@ public class VitaminEFormula implements ExplainableNutrientFormula {
         double ffm = ctx.getFfmOrDefault(50.0);
         double pollutionLevel = MvpConstants.POLLUTION_LEVEL;
 
-        // Группа 2: силовая → SS + TSS, кардио → только TSS
+        // SS и TSS
         double ss = 0.0;
         double tss = ctx.getTssOrZero();
         if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
             ss = ctx.getSsOrZero();
         }
 
-        double value = (ffm * 0.8)
-                + (pollutionLevel * 20.0)
-                + ((ss + tss) * 0.0008);
+        // Базовая формула по PDF
+        double value = 15.0
+                + (ffm * 0.1)
+                + (pollutionLevel * 2.0)
+                + ((ss + tss) * 0.00005);
 
         // Дополнительный расход
         value += MvpConstants.EXTRA_E;
 
-        return Math.max(value, 0.0);
+        // Clamp в диапазон [MIN, MAX]
+        return NutrientLimits.clamp(value, NutrientLimits.E_MIN, NutrientLimits.E_MAX);
     }
 
     @Override
     public String template() {
-        return "E = (FFM × 0.8) + (pollution_level × 20) + ((SS + TSS) × 0.0008) + 3";
+        return "E = clamp(15 + FFM×0.1 + pollution_level×2 + (SS+TSS)×0.00005 + extra, 15, 1000)";
     }
 
     @Override
@@ -69,6 +75,8 @@ public class VitaminEFormula implements ExplainableNutrientFormula {
         vars.put("SS", ss);
         vars.put("TSS", tss);
         vars.put("extra", MvpConstants.EXTRA_E);
+        vars.put("min", NutrientLimits.E_MIN);
+        vars.put("max", NutrientLimits.E_MAX);
         return vars;
     }
 }

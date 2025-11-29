@@ -3,7 +3,6 @@ package com.nutribot.bot.nutrition.formulas;
 import com.nutribot.bot.nutrition.ExplainableNutrientFormula;
 import com.nutribot.bot.nutrition.MvpConstants;
 import com.nutribot.bot.nutrition.NutrientContext;
-import com.nutribot.bot.workout.WorkoutType;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -12,13 +11,14 @@ import java.util.Map;
 /**
  * Витамин K
  * <p>
- * Формула:
- * K = (bone_mass × 0.05) + SS × 0.0001 + (warfarin ? 100 : 0) + 20 (доп. расход)
+ * Формула (PDF):
+ * K = clamp(120 + bone_mass×1 + (warfarin ? 100 : 0) + EXTRA,
+ *           MIN=90, MAX=1000)
  * <p>
- * Группа 2: для силовых используем SS, для кардио SS = 0.
+ * Единицы: мкг
+ * Варфарин блокирует K. Синергия с D3 и Ca.
  * <p>
  * Особенности:
- * - bone_mass из контекста
  * - warfarin = false (MVP)
  */
 @Component
@@ -34,27 +34,25 @@ public class VitaminKFormula implements ExplainableNutrientFormula {
         double boneMass = ctx.getBoneMassOrDefault(3.0);
         boolean warfarin = MvpConstants.WARFARIN;
 
-        // Группа 2: силовая → SS, кардио → SS = 0
-        double ss = 0.0;
-        if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
-            ss = ctx.getSsOrZero();
+        // Базовая формула по PDF
+        double value = 120.0
+                + (boneMass * 1.0);
+
+        // Модификатор варфарина
+        if (warfarin) {
+            value += 100.0;
         }
-
-        double warfarinBonus = warfarin ? 100.0 : 0.0;
-
-        double value = (boneMass * 0.05)
-                + (ss * 0.0001)
-                + warfarinBonus;
 
         // Дополнительный расход
         value += MvpConstants.EXTRA_K;
 
-        return Math.max(value, 0.0);
+        // Clamp в диапазон [MIN, MAX]
+        return NutrientLimits.clamp(value, NutrientLimits.K_MIN, NutrientLimits.K_MAX);
     }
 
     @Override
     public String template() {
-        return "K = (bone_mass × 0.05) + (SS × 0.0001) + warfarin_bonus + 20";
+        return "K = clamp(120 + bone_mass×1 + warfarin_bonus + extra, 90, 1000)";
     }
 
     @Override
@@ -62,14 +60,13 @@ public class VitaminKFormula implements ExplainableNutrientFormula {
         double boneMass = ctx.getBoneMassOrDefault(3.0);
         boolean warfarin = MvpConstants.WARFARIN;
 
-        double ss = ctx.getWorkoutType() == WorkoutType.STRENGTH ? ctx.getSsOrZero() : 0.0;
-
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("bone_mass", boneMass);
-        vars.put("SS", ss);
         vars.put("warfarin", warfarin);
         vars.put("warfarin_bonus", warfarin ? 100.0 : 0.0);
         vars.put("extra", MvpConstants.EXTRA_K);
+        vars.put("min", NutrientLimits.K_MIN);
+        vars.put("max", NutrientLimits.K_MAX);
         return vars;
     }
 }

@@ -12,12 +12,15 @@ import java.util.Map;
 /**
  * Цинк (Zn)
  * <p>
- * Формула:
- * Zn = (FFM × 0.2) + (sweat_rate × 0.1) + SS × 0.0004 + 2.5 (доп. расход)
+ * Формула (PDF):
+ * Zn = clamp(10 + FFM×0.1 + sweat_rate×0.05 + SS×0.0002 + EXTRA,
+ *            MIN=8, MAX=30)
+ * <p>
+ * Единицы: мг
+ * Антагонизм с Fe. sweat_rate = base_sweat × 0.2
  * <p>
  * Особенности:
  * - Только SS (для силовых), TSS не используется
- * - sweat_rate = base_sweat × 0.2, где base_sweat: М = 1.0, Ж = 0.75
  */
 @Component
 public class ZincFormula implements ExplainableNutrientFormula {
@@ -38,19 +41,22 @@ public class ZincFormula implements ExplainableNutrientFormula {
             ss = ctx.getSsOrZero();
         }
 
-        double value = (ffm * 0.2)
-                + (sweatRate * 0.1)
-                + (ss * 0.0004);
+        // Базовая формула по PDF
+        double value = 10.0
+                + (ffm * 0.1)
+                + (sweatRate * 0.05)
+                + (ss * 0.0002);
 
         // Дополнительный расход
         value += MvpConstants.EXTRA_ZN;
 
-        return Math.max(value, 0.0);
+        // Clamp в диапазон [MIN, MAX]
+        return NutrientLimits.clamp(value, NutrientLimits.ZN_MIN, NutrientLimits.ZN_MAX);
     }
 
     @Override
     public String template() {
-        return "Zn = (FFM × 0.2) + (sweat_rate × 0.1) + (SS × 0.0004) + 2.5";
+        return "Zn = clamp(10 + FFM×0.1 + sweat_rate×0.05 + SS×0.0002 + extra, 8, 30)";
     }
 
     @Override
@@ -64,6 +70,8 @@ public class ZincFormula implements ExplainableNutrientFormula {
         vars.put("sweat_rate", sweatRate);
         vars.put("SS", ss);
         vars.put("extra", MvpConstants.EXTRA_ZN);
+        vars.put("min", NutrientLimits.ZN_MIN);
+        vars.put("max", NutrientLimits.ZN_MAX);
         return vars;
     }
 }

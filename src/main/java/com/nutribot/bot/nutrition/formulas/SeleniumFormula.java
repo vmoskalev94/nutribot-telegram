@@ -12,13 +12,14 @@ import java.util.Map;
 /**
  * Селен (Se)
  * <p>
- * Формула:
- * Se = (TSH × 0.8) + (heavy_metal_exposure × 15) + (SS + TSS) × 0.5 + 12 (доп. расход)
+ * Формула (PDF):
+ * Se = clamp(55 + (TSH > 3.0 ? 20 : 0) + heavy_metal_exposure×10 + (SS+TSS)×0.0001 + EXTRA,
+ *            MIN=55, MAX=300)
  * <p>
- * Группа 2: для силовых используем SS + TSS, для кардио только TSS.
+ * Единицы: мкг
+ * UL = 400 мкг. Токсичен при длительном превышении.
  * <p>
  * Особенности:
- * - TSH = 2.0 мМЕ/л (MVP)
  * - heavy_metal_exposure: не курит = 1, курит = 2
  */
 @Component
@@ -35,26 +36,33 @@ public class SeleniumFormula implements ExplainableNutrientFormula {
         double smokePacks = ctx.getSmokePacksOrZero();
         double heavyMetalExposure = MvpConstants.getHeavyMetalExposure(smokePacks);
 
-        // Группа 2: силовая → SS + TSS, кардио → только TSS
+        // SS и TSS
         double ss = 0.0;
         double tss = ctx.getTssOrZero();
         if (ctx.getWorkoutType() == WorkoutType.STRENGTH) {
             ss = ctx.getSsOrZero();
         }
 
-        double value = (tsh * 0.8)
-                + (heavyMetalExposure * 15.0)
-                + ((ss + tss) * 0.5);
+        // Базовая формула по PDF
+        double value = 55.0;
+
+        // Модификаторы
+        if (tsh > 3.0) {
+            value += 20.0;
+        }
+        value += heavyMetalExposure * 10.0;
+        value += (ss + tss) * 0.0001;
 
         // Дополнительный расход
         value += MvpConstants.EXTRA_SE;
 
-        return Math.max(value, 0.0);
+        // Clamp в диапазон [MIN, MAX]
+        return NutrientLimits.clamp(value, NutrientLimits.SE_MIN, NutrientLimits.SE_MAX);
     }
 
     @Override
     public String template() {
-        return "Se = (TSH × 0.8) + (heavy_metal_exposure × 15) + ((SS + TSS) × 0.5) + 12";
+        return "Se = clamp(55 + tsh_bonus + heavy_metal×10 + (SS+TSS)×0.0001 + extra, 55, 300)";
     }
 
     @Override
@@ -68,10 +76,13 @@ public class SeleniumFormula implements ExplainableNutrientFormula {
 
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("TSH", tsh);
+        vars.put("tsh_bonus", tsh > 3.0 ? 20.0 : 0.0);
         vars.put("heavy_metal_exposure", heavyMetalExposure);
         vars.put("SS", ss);
         vars.put("TSS", tss);
         vars.put("extra", MvpConstants.EXTRA_SE);
+        vars.put("min", NutrientLimits.SE_MIN);
+        vars.put("max", NutrientLimits.SE_MAX);
         return vars;
     }
 }
